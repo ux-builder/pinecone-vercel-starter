@@ -1,5 +1,5 @@
-import cheerio from 'cheerio';
-import { NodeHtmlMarkdown } from 'node-html-markdown';
+import cheerio from "cheerio";
+import { NodeHtmlMarkdown } from "node-html-markdown";
 
 interface Page {
   url: string;
@@ -11,7 +11,7 @@ class Crawler {
   private pages: Page[] = [];
   private queue: { url: string; depth: number }[] = [];
 
-  constructor(private maxDepth = 2, private maxPages = 1) { }
+  constructor(private maxDepth = 2, private maxPages = 1) {}
 
   async crawl(startUrl: string): Promise<Page[]> {
     // Add the start URL to the queue
@@ -29,6 +29,7 @@ class Crawler {
       this.seen.add(url);
 
       // Fetch the page HTML
+      console.log(`Fetching ${url}...`);
       const html = await this.fetchPage(url);
 
       // Parse the HTML and add the page to the list of crawled pages
@@ -51,15 +52,21 @@ class Crawler {
   }
 
   private shouldContinueCrawling() {
-    return this.queue.length > 0 && this.pages.length < this.maxPages;
+    return (
+      this.queue.length > 0 &&
+      (this.maxPages <= 0 || this.pages.length < this.maxPages)
+    );
   }
 
   private addToQueue(url: string, depth = 0) {
     this.queue.push({ url, depth });
   }
 
-  private addNewUrlsToQueue(urls: string[], depth: number) {
-    this.queue.push(...urls.map(url => ({ url, depth: depth + 1 })));
+  private addNewUrlsToQueue(urls: string[], currentDepth: number) {
+    const newDepth = currentDepth + 1;
+    if (newDepth <= this.maxDepth) {
+      this.queue.push(...urls.map((url) => ({ url, depth: newDepth })));
+    }
   }
 
   private async fetchPage(url: string): Promise<string> {
@@ -68,20 +75,28 @@ class Crawler {
       return await response.text();
     } catch (error) {
       console.error(`Failed to fetch ${url}: ${error}`);
-      return '';
+      return "";
     }
   }
 
   private parseHtml(html: string): string {
     const $ = cheerio.load(html);
-    $('a').removeAttr('href');
+    $("a").removeAttr("href");
     return NodeHtmlMarkdown.translate($.html());
   }
 
   private extractUrls(html: string, baseUrl: string): string[] {
     const $ = cheerio.load(html);
-    const relativeUrls = $('a').map((_, link) => $(link).attr('href')).get() as string[];
-    return relativeUrls.map(relativeUrl => new URL(relativeUrl, baseUrl).href);
+    const relativeUrls = $("a")
+      .map((_, link) => $(link).attr("href"))
+      .get()
+      .filter(
+        (href) =>
+          href && !href.startsWith("javascript:") && !href.startsWith("#")
+      )
+      .map((relativeUrl) => new URL(relativeUrl, baseUrl).href);
+    console.log(relativeUrls);
+    return relativeUrls;
   }
 }
 
